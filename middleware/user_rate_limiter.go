@@ -6,15 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NadunSanjeevana/go-rate-limiter/pkg/redisclient"
 	"github.com/NadunSanjeevana/go-rate-limiter/utils"
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 )
-
-// Redis client
-var redisClient = redis.NewClient(&redis.Options{
-	Addr: "localhost:6379",
-})
 
 // Define rate limits for different user roles
 var rateLimits = map[string]int{
@@ -27,7 +22,7 @@ var rateLimits = map[string]int{
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Skip token check for login route
-		if c.Request.URL.Path == "/login" {
+		if c.Request.URL.Path == "/login"|| c.Request.URL.Path == "/logout" {
 			c.Next()
 			return
 		}
@@ -41,6 +36,11 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// Remove "Bearer " prefix if present
 		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+
+		if isTokenBlacklisted(tokenString) {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Token has been revoked"})
+			return
+		}
 
 		// Parse and validate token
 		claims, err := utils.ParseJWT(tokenString)
@@ -60,6 +60,12 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
+func isTokenBlacklisted(token string) bool {
+	ctx := context.Background()
+	exists, err := redisclient.RedisClient.Exists(ctx, fmt.Sprintf("blacklist:%s", token)).Result()
+	return err == nil && exists > 0
+}
+
 // Apply rate limiting based on user role
 func applyRateLimit(c *gin.Context, username, role string) {
 	ctx := context.Background()
@@ -72,7 +78,7 @@ func applyRateLimit(c *gin.Context, username, role string) {
 	}
 
 	// Increment request count in Redis
-	count, err := redisClient.Incr(ctx, key).Result()
+	count, err := redisclient.RedisClient.Incr(ctx, key).Result()
 	if err != nil {
 		c.AbortWithStatusJSON(500, gin.H{"error": "Internal Server Error"})
 		return
@@ -80,7 +86,7 @@ func applyRateLimit(c *gin.Context, username, role string) {
 
 	// Set expiration if first request
 	if count == 1 {
-		redisClient.Expire(ctx, key, 10*time.Second)
+		redisclient.RedisClient.Expire(ctx, key, 10*time.Second)
 	}
 
 	// Check if limit exceeded

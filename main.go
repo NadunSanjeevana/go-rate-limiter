@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/NadunSanjeevana/go-rate-limiter/middleware"
+	"github.com/NadunSanjeevana/go-rate-limiter/pkg/redisclient"
 	"github.com/NadunSanjeevana/go-rate-limiter/utils"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	redisclient.InitRedis()
 	r := gin.Default()
 
 	// Apply JWT validation & rate limiting (except login route)
@@ -36,6 +39,26 @@ func main() {
 
 		c.JSON(http.StatusOK, gin.H{"token": token})
 	})
+
+	r.POST("/logout", func(c *gin.Context) {
+		token := c.GetHeader("Authorization")
+		if token == "" {
+			c.JSON(400, gin.H{"error": "Missing token"})
+			return
+		}
+
+		token = token[len("Bearer "):]
+
+		ctx := context.Background()
+		err := utils.BlacklistToken(ctx, token)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to logout"})
+			return
+		}
+
+		c.JSON(200, gin.H{"message": "Logged out successfully"})
+	})
+
 
 	// Protected route - Requires valid JWT & rate limiting
 	r.GET("/ping", func(c *gin.Context) {
