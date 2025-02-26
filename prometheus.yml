@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 10s
+
+scrape_configs:
+  - job_name: "rate_limiter"
+    static_configs:
+      - targets: ["localhost:8080"]

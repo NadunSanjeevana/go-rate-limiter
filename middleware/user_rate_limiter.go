@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -10,7 +11,43 @@ import (
 	"github.com/NadunSanjeevana/go-rate-limiter/pkg/redisclient"
 	"github.com/NadunSanjeevana/go-rate-limiter/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var (
+	// Define Prometheus metrics
+	requestsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rate_limit_requests_total",
+			Help: "Total number of requests per role",
+		},
+		[]string{"role"},
+	)
+
+	blockedRequests = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rate_limit_blocked_total",
+			Help: "Total number of blocked requests due to rate limiting",
+		},
+		[]string{"role"},
+	)
+
+	requestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rate_limit_request_duration_seconds",
+			Help:    "Histogram of request duration per role",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"role"},
+	)
+)
+
+// Register Prometheus metrics
+func init() {
+	prometheus.MustRegister(requestsTotal)
+	prometheus.MustRegister(blockedRequests)
+	prometheus.MustRegister(requestDuration)
+}
 
 // Define rate limits for different user roles
 var rateLimits = map[string]int{
@@ -22,33 +59,34 @@ var rateLimits = map[string]int{
 
 // Leaky Bucket Algorithm Rate Limiting
 func applyLeakyBucketRateLimit(c *gin.Context, username, role string) {
+	startTime := time.Now()
 	ctx := context.Background()
 
-	// key := fmt.Sprintf("rate_limit:%s", username)
-	maxRequests, exists := rateLimits[role]
-	if !exists {
-		maxRequests = 5 // Default for unknown roles
-	}
+	key := fmt.Sprintf("bucket:%s", username)
+	maxRequests := rateLimits[role]
 
-	// Check current state of the leaky bucket in Redis
+	// Get current time
 	currentTime := time.Now().Unix()
-	bucketKey := fmt.Sprintf("bucket:%s", username)
-	lastRequestTime, _ := redisclient.RedisClient.HGet(ctx, bucketKey, "last_request_time").Int64()
-	bucketLevel, _ := redisclient.RedisClient.HGet(ctx, bucketKey, "level").Int64()
+
+	// Retrieve bucket state from Redis
+	lastRequestTime, _ := redisclient.RedisClient.HGet(ctx, key, "last_request_time").Int64()
+	bucketLevel, _ := redisclient.RedisClient.HGet(ctx, key, "level").Int64()
 
 	// Time elapsed since last request
 	timeElapsed := currentTime - lastRequestTime
 
-	// Leak the bucket based on time elapsed
-	if timeElapsed > 10 { // Assuming 10 seconds leak rate
-		bucketLevel = bucketLevel - (int64(timeElapsed) / 10) // Leaks at 1 per 10 seconds
+	// Leak requests at a fixed rate
+	if timeElapsed > 10 { // 1 request per 10 seconds
+		bucketLevel = bucketLevel - (timeElapsed / 10)
 		if bucketLevel < 0 {
 			bucketLevel = 0
 		}
 	}
 
-	// Check if the bucket has room for more requests
+	// Check if request can be allowed
 	if bucketLevel >= int64(maxRequests) {
+		log.Printf("[BLOCKED] User: %s, Role: %s, Rate Limit Exceeded!", username, role)
+		blockedRequests.WithLabelValues(role).Inc()
 		c.AbortWithStatusJSON(429, gin.H{"error": "Rate limit exceeded"})
 		return
 	}
@@ -56,12 +94,20 @@ func applyLeakyBucketRateLimit(c *gin.Context, username, role string) {
 	// Increment the bucket level
 	bucketLevel++
 
-	// Save the updated bucket state in Redis
-	redisclient.RedisClient.HSet(ctx, bucketKey, "last_request_time", currentTime)
-	redisclient.RedisClient.HSet(ctx, bucketKey, "level", bucketLevel)
+	// Save updated bucket state to Redis
+	redisclient.RedisClient.HSet(ctx, key, "last_request_time", currentTime)
+	redisclient.RedisClient.HSet(ctx, key, "level", bucketLevel)
 
-	// Set expiration for the bucket (to reset it after a certain period)
-	redisclient.RedisClient.Expire(ctx, bucketKey, 10*time.Second)
+	// Set expiration for the bucket
+	redisclient.RedisClient.Expire(ctx, key, 10*time.Second)
+
+	// Log allowed request
+	log.Printf("[ALLOWED] User: %s, Role: %s, Remaining: %d", username, role, maxRequests-int(bucketLevel))
+
+	// Increment Prometheus metrics
+	requestsTotal.WithLabelValues(role).Inc()
+	duration := time.Since(startTime).Seconds()
+	requestDuration.WithLabelValues(role).Observe(duration)
 
 	c.Next()
 }

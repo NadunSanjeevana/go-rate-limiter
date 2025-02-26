@@ -8,11 +8,14 @@ import (
 	"github.com/NadunSanjeevana/go-rate-limiter/pkg/redisclient"
 	"github.com/NadunSanjeevana/go-rate-limiter/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
 	redisclient.InitRedis()
 	r := gin.Default()
+
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// Apply JWT validation & rate limiting (except login route)
 	r.Use(middleware.AuthMiddleware())
