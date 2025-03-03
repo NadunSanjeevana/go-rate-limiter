@@ -32,7 +32,7 @@ The **API Request Rate Limiter** is a middleware solution designed to control th
 ## 🔧 Installation & Setup
 ### 1️⃣ Clone the repository
 ```sh
-git clone https://github.com/yourusername/go-rate-limiter.git
+git clone https://github.com/NadunSanjeevana/go-rate-limiter.git
 cd go-rate-limiter
 ```
 
