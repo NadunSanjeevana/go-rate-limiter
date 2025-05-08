@@ -1,3 +1,5 @@
+![Go Rate Limiter](/Go-rate-limit Package.png)
+
 # Go Rate Limiter
 
 A flexible and efficient rate limiter package for Go applications, with support for multiple rate limiting algorithms and integration with popular web frameworks like Gin.
