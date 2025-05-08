@@ -16,7 +16,7 @@ A flexible and efficient rate limiter package for Go applications, with support 
 ## Installation
 
 ```bash
-go get -u github.com/your-username/go-rate-limiter
+go get -u github.com/NadunSanjeevana/go-rate-limiter
 ```
 
 ## Quick Start
@@ -28,9 +28,9 @@ import (
 	"time"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	"github.com/your-username/go-rate-limiter/pkg/middleware"
-	"github.com/your-username/go-rate-limiter/pkg/ratelimit"
-	"github.com/your-username/go-rate-limiter/pkg/redisclient"
+	"github.com/NadunSanjeevana/go-rate-limiter/pkg/middleware"
+	"github.com/NadunSanjeevana/go-rate-limiter/pkg/ratelimit"
+	"github.com/NadunSanjeevana/go-rate-limiter/pkg/redisclient"
 )
 
 func main() {
