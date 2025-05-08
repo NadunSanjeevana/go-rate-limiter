@@ -1,4 +1,4 @@
-module github.com/your-username/go-rate-limiter
+module github.com/NadunSanjeevana/go-rate-limiter
 
 go 1.21
 
