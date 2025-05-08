@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/your-username/go-rate-limiter/pkg/ratelimit"
+	"github.com/NadunSanjeevana/go-rate-limiter/pkg/ratelimit"
 )
 
 // RateLimiterMiddleware creates a middleware function for rate limiting

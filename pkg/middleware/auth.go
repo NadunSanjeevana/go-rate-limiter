@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	"github.com/your-username/go-rate-limiter/pkg/utils"
+	"github.com/NadunSanjeevana/go-rate-limiter/pkg/utils"
 )
 
 // AuthMiddlewareOptions defines options for the authentication middleware

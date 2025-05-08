@@ -8,10 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
-	"github.com/your-username/go-rate-limiter/pkg/middleware"
-	"github.com/your-username/go-rate-limiter/pkg/ratelimit"
-	"github.com/your-username/go-rate-limiter/pkg/redisclient"
-	"github.com/your-username/go-rate-limiter/pkg/utils"
+	"github.com/NadunSanjeevana/go-rate-limiter/pkg/middleware"
+	"github.com/NadunSanjeevana/go-rate-limiter/pkg/ratelimit"
+	"github.com/NadunSanjeevana/go-rate-limiter/pkg/redisclient"
+	"github.com/NadunSanjeevana/go-rate-limiter/pkg/utils"
 )
 
 func main() {
