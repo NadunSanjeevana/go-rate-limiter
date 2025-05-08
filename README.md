@@ -1,98 +1,138 @@
-# API Request Rate Limiter
+# Go Rate Limiter
 
-## 📌 Project Overview
-The **API Request Rate Limiter** is a middleware solution designed to control the rate of incoming API requests using **Leaky Bucket** and **Sliding Window** algorithms. It prevents abuse, ensures fair usage, and improves API reliability. The project also includes **JWT authentication**, **blacklist token management**, and **monitoring via Prometheus & Grafana**.
+A flexible and efficient rate limiter package for Go applications, with support for multiple rate limiting algorithms and integration with popular web frameworks like Gin.
 
-## 🚀 Features
-- **Rate Limiting**: Implements request throttling using Leaky Bucket and Sliding Window algorithms.
-- **JWT Authentication**: Secure API endpoints with JSON Web Tokens.
-- **Blacklist Token Management**: Store revoked tokens in Redis to prevent reuse.
-- **Redis Integration**: Efficient request counting and token storage.
-- **Logging & Monitoring**: Tracks request rates and API performance using **Prometheus** & **Grafana**.
+## Features
 
-## 🛠️ Technologies Used
-- **Go (Gin Framework)** - API development
-- **Redis** - In-memory data store for rate limiting
-- **JWT (JSON Web Tokens)** - Authentication
-- **Prometheus & Grafana** - Monitoring and visualization
-- **Docker & Docker Compose** - Containerized deployment
+- Multiple rate limiting algorithms:
+  - **Leaky Bucket**: Smooths out traffic by processing requests at a constant rate
+  - **Sliding Window**: Tracks requests within a moving time window for precise control
+- Redis-backed storage for distributed environments
+- Prometheus metrics integration
+- Easy integration with the Gin web framework
+- JWT authentication middleware with blacklisting support
+- Customizable rate limits per user role
 
-## 📂 Project Structure
+## Installation
+
 ```bash
-📦 go-rate-limiter
- ┣ 📂 middleware        # Middleware for rate limiting and authentication
- ┣ 📂 pkg               # Package for Redis client
- ┣ 📂 utils             # JWT utilities (token generation & validation)
- ┣ 📂 config            # Configuration files (e.g., Prometheus, Docker Compose)
- ┣ 📄 main.go           # Main application entry point
- ┣ 📄 go.mod            # Go module dependencies
- ┣ 📄 README.md         # Project documentation
+go get -u github.com/your-username/go-rate-limiter
 ```
 
-## 🔧 Installation & Setup
-### 1️⃣ Clone the repository
-```sh
-git clone https://github.com/NadunSanjeevana/go-rate-limiter.git
-cd go-rate-limiter
-```
+## Quick Start
 
-### 2️⃣ Install dependencies
-Ensure you have **Go**, **Redis**, and **Docker** installed.
-```sh
-go mod tidy  # Install Go dependencies
-```
+```go
+package main
 
-### 3️⃣ Start Redis
-```sh
-redis-server
-```
+import (
+	"time"
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"github.com/your-username/go-rate-limiter/pkg/middleware"
+	"github.com/your-username/go-rate-limiter/pkg/ratelimit"
+	"github.com/your-username/go-rate-limiter/pkg/redisclient"
+)
 
-### 4️⃣ Run the API
-```sh
-go run main.go
-```
+func main() {
+	// Initialize Redis store
+	store := redisclient.NewRedisStore(&redis.Options{
+		Addr: "localhost:6379",
+	})
 
-### 5️⃣ Run with Docker
-```sh
-docker-compose up --build
-```
+	// Configure rate limiter
+	config := ratelimit.NewDefaultConfig()
+	config.WindowSize = 10 * time.Second
+	config.RateLimits = map[string]int{
+		"free":    5,  // 5 requests per 10 seconds
+		"premium": 20, // 20 requests per 10 seconds
+	}
 
-## 📜 API Endpoints
-### 🔐 Authentication
-#### Login (Returns JWT Token)
-```sh
-POST /login
-{
-  "username": "user1",
-  "role": "free"
+	// Create a leaky bucket rate limiter
+	limiter := ratelimit.NewLeakyBucket(store, config)
+
+	// Create Gin router
+	r := gin.Default()
+
+	// Create rate limiter middleware
+	rateLimiterMiddleware := middleware.NewRateLimiterMiddleware(
+		limiter,
+		middleware.WithIdentifierFunc(func(c *gin.Context) string {
+			return c.ClientIP() // Identify users by IP
+		}),
+	)
+
+	// Apply middleware to your routes
+	r.Use(rateLimiterMiddleware.Handle())
+
+	// Define your routes
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Hello World!",
+		})
+	})
+
+	r.Run(":8080")
 }
 ```
-#### Logout (Blacklist Token)
-```sh
-POST /logout
+
+## Rate Limiting Algorithms
+
+### Leaky Bucket
+
+The leaky bucket algorithm works by processing requests at a constant rate, smoothing out bursts of traffic. It's like a bucket with a small hole at the bottom - water (requests) pours in at the top, and leaks out at a steady rate.
+
+```go
+limiter := ratelimit.NewLeakyBucket(store, config)
 ```
 
-### 📌 Rate-Limited Routes
-| Method | Endpoint  | Role-Based Limit |
-|--------|----------|-----------------|
-| GET    | `/ping`  | 5 (Free), 20 (Premium), 50 (Admin) |
+### Sliding Window
 
-## 📊 Monitoring with Prometheus & Grafana
-### 1️⃣ Start Prometheus & Grafana
-```sh
-docker-compose up -d prometheus grafana
+The sliding window algorithm provides precise control by tracking requests within a moving time window. It's more responsive to changes in traffic patterns than fixed window approaches.
+
+```go
+limiter := ratelimit.NewSlidingWindow(store, config)
 ```
-### 2️⃣ Access Dashboards
-- **Prometheus**: `http://localhost:9090`
-- **Grafana**: `http://localhost:3000` (Default login: `admin/admin`)
 
-## 📌 Future Enhancements
-- Add IP-based rate limiting.
-- Implement a user-friendly dashboard for rate limit stats.
-- Support for distributed systems with **Kafka**.
+## Authentication Middleware
 
-## 📜 License
-This project is **open-source** under the MIT License.
+The package also includes JWT authentication middleware with role-based access control:
 
-## 📬 Contact
-For any issues or contributions, reach out via [GitHub](https://github.com/NadunSanjeevana).
+```go
+authMiddleware := middleware.NewAuthMiddleware(middleware.AuthMiddlewareOptions{
+    ExcludePaths: []string{"/login", "/public"},
+    RedisClient:  store.GetClient(),
+})
+
+// Apply authentication middleware
+r.Use(authMiddleware)
+```
+
+## Custom Configuration
+
+You can fully customize the rate limiter with your own configuration:
+
+```go
+config := &ratelimit.Config{
+    RateLimits: map[string]int{
+        "free":     10,
+        "premium":  50,
+        "business": 100,
+    },
+    WindowSize:    30 * time.Second,
+    EnableMetrics: true,
+    DefaultRole:   "free",
+    DefaultLimit:  10,
+}
+```
+
+## Examples
+
+Check out the `examples` directory for complete working examples including:
+
+- Basic rate limiting with Gin
+- Authentication with role-based rate limits
+- Prometheus metrics integration
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
