@@ -1,4 +1,5 @@
-![Go Rate Limiter](/Go-rate-limit Package.png)
+![Go-rate-limit Package Overview](https://github.com/user-attachments/assets/3c8c1230-f95f-43d9-9529-56260dd08ace)
+
 
 # Go Rate Limiter
 
